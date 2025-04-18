@@ -1,4 +1,4 @@
-name: Auto Version Tag on Main Merge
+name: Auto Version Tag and Release with Changelog
 
 on:
   push:
@@ -7,11 +7,11 @@ on:
 
 jobs:
   version-tag:
-    if: startsWith(github.event.head_commit.message, 'Merge pull request') # PR merge일 때만 동작
+    if: startsWith(github.event.head_commit.message, 'Merge pull request')
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout full history
+    - name: Checkout code
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
@@ -19,18 +19,17 @@ jobs:
     - name: Get latest tag
       id: get_tag
       run: |
-        latest=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || echo "v0.0.0")
+        latest=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)
+        if [ -z "$latest" ]; then
+          latest="v0.0.0"
+        fi
         echo "tag=$latest" >> $GITHUB_OUTPUT
 
     - name: Detect merged branch type
       id: detect
       run: |
-        # 최근 merge된 PR의 브랜치 이름 찾기
         branch=$(git log -1 --pretty=format:%s | sed -n 's/Merge pull request .* from [^/]*\/\(.*\)/\1/p')
 
-        echo "Merged branch: $branch"
-
-        # 버전 증가 타입 결정
         if [[ "$branch" == feature/* ]]; then
           echo "bump=minor" >> $GITHUB_OUTPUT
         elif [[ "$branch" == hotfix/* || "$branch" == refactor/* ]]; then
@@ -62,6 +61,14 @@ jobs:
         echo "new_version=$new_version" >> $GITHUB_OUTPUT
         echo "Next version: $new_version"
 
+    - name: Generate changelog from commits
+      id: changelog
+      run: |
+        previous="${{ steps.get_tag.outputs.tag }}"
+        current="HEAD"
+        echo "## ${{ steps.version.outputs.new_version }} - $(date +%Y-%m-%d)" > RELEASE_CHANGELOG.md
+        git log ${previous}..${current} --pretty=format:"* %s (%h)" >> RELEASE_CHANGELOG.md
+
     - name: Create Git Tag
       run: |
         git config user.name github-actions
@@ -69,13 +76,11 @@ jobs:
         git tag ${{ steps.version.outputs.new_version }}
         git push origin ${{ steps.version.outputs.new_version }}
 
-    - name: Create GitHub Release
+    - name: Create GitHub Release with changelog
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.version.outputs.new_version }}
         name: Release ${{ steps.version.outputs.new_version }}
-        body: |
-          Automatically generated release from merged branch:
-          `${{ steps.detect.outputs.branch }}`
+        body_path: RELEASE_CHANGELOG.md
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
