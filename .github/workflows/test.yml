@@ -1,0 +1,46 @@
+name: Test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        go-version: [1.21.x, 1.24.x]
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ matrix.go-version }}-
+
+    - name: Unit Test
+      run: go test -v -race ./...
+
+    - name: Benchmark
+      run: go test -bench . -benchmem ./...
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Update coverage report
+      uses: ncruces/go-coverage-report@main
+      with:
+        report: 'true'
+        chart: 'true'
+        amend: 'true'
+      continue-on-error: true
