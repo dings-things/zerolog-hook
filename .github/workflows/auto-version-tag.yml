@@ -1,0 +1,81 @@
+name: Auto Version Tag on Main Merge
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  version-tag:
+    if: startsWith(github.event.head_commit.message, 'Merge pull request') # PR merge일 때만 동작
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout full history
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get latest tag
+      id: get_tag
+      run: |
+        latest=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || echo "v0.0.0")
+        echo "tag=$latest" >> $GITHUB_OUTPUT
+
+    - name: Detect merged branch type
+      id: detect
+      run: |
+        # 최근 merge된 PR의 브랜치 이름 찾기
+        branch=$(git log -1 --pretty=format:%s | sed -n 's/Merge pull request .* from [^/]*\/\(.*\)/\1/p')
+
+        echo "Merged branch: $branch"
+
+        # 버전 증가 타입 결정
+        if [[ "$branch" == feature/* ]]; then
+          echo "bump=minor" >> $GITHUB_OUTPUT
+        elif [[ "$branch" == hotfix/* || "$branch" == refactor/* ]]; then
+          echo "bump=patch" >> $GITHUB_OUTPUT
+        elif [[ "$branch" == release/major ]]; then
+          echo "bump=major" >> $GITHUB_OUTPUT
+        else
+          echo "Unsupported branch type: $branch"
+          exit 1
+        fi
+        echo "branch=$branch" >> $GITHUB_OUTPUT
+
+    - name: Calculate next version
+      id: version
+      run: |
+        current="${{ steps.get_tag.outputs.tag }}"
+        bump="${{ steps.detect.outputs.bump }}"
+        IFS='.' read -r major minor patch <<< "${current#v}"
+
+        if [[ "$bump" == "major" ]]; then
+          major=$((major + 1)); minor=0; patch=0
+        elif [[ "$bump" == "minor" ]]; then
+          minor=$((minor + 1)); patch=0
+        elif [[ "$bump" == "patch" ]]; then
+          patch=$((patch + 1))
+        fi
+
+        new_version="v${major}.${minor}.${patch}"
+        echo "new_version=$new_version" >> $GITHUB_OUTPUT
+        echo "Next version: $new_version"
+
+    - name: Create Git Tag
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git tag ${{ steps.version.outputs.new_version }}
+        git push origin ${{ steps.version.outputs.new_version }}
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.new_version }}
+        name: Release ${{ steps.version.outputs.new_version }}
+        body: |
+          Automatically generated release from merged branch:
+          `${{ steps.detect.outputs.branch }}`
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
