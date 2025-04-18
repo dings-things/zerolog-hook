@@ -16,6 +16,9 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Fetch all tags
+      run: git fetch --tags
+
     - name: Get latest tag
       id: get_tag
       run: |
@@ -60,14 +63,19 @@ jobs:
         new_version="v${major}.${minor}.${patch}"
         echo "new_version=$new_version" >> $GITHUB_OUTPUT
         echo "Next version: $new_version"
-
+    
     - name: Generate changelog from commits
       id: changelog
       run: |
         previous="${{ steps.get_tag.outputs.tag }}"
         current="HEAD"
         echo "## ${{ steps.version.outputs.new_version }} - $(date +%Y-%m-%d)" > RELEASE_CHANGELOG.md
+
+        if git rev-parse "$previous" >/dev/null 2>&1; then
         git log ${previous}..${current} --pretty=format:"* %s (%h)" >> RELEASE_CHANGELOG.md
+        else
+        git log --pretty=format:"* %s (%h)" >> RELEASE_CHANGELOG.md
+        fi
 
     - name: Create Git Tag
       run: |
