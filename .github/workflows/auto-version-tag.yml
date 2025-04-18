@@ -63,7 +63,7 @@ jobs:
         new_version="v${major}.${minor}.${patch}"
         echo "new_version=$new_version" >> $GITHUB_OUTPUT
         echo "Next version: $new_version"
-
+    
     - name: Generate changelog from commits
       id: changelog
       run: |
