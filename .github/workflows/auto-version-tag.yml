@@ -35,7 +35,7 @@ jobs:
 
         if [[ "$branch" == feature/* ]]; then
           echo "bump=minor" >> $GITHUB_OUTPUT
-        elif [[ "$branch" == hotfix/* || "$branch" == refactor/* ]]; then
+        elif [[ "$branch" == hotfix/* || "$branch" == refactor/* || "$branch" == fix/* ]]; then
           echo "bump=patch" >> $GITHUB_OUTPUT
         elif [[ "$branch" == release/major ]]; then
           echo "bump=major" >> $GITHUB_OUTPUT
@@ -72,9 +72,9 @@ jobs:
         echo "## ${{ steps.version.outputs.new_version }} - $(date +%Y-%m-%d)" > RELEASE_CHANGELOG.md
 
         if git rev-parse "$previous" >/dev/null 2>&1; then
-        git log ${previous}..${current} --pretty=format:"* %s (%h)" >> RELEASE_CHANGELOG.md
+          git log ${previous}..${current} --pretty=format:"* %s (%h)" >> RELEASE_CHANGELOG.md
         else
-        git log --pretty=format:"* %s (%h)" >> RELEASE_CHANGELOG.md
+          git log --pretty=format:"* %s (%h)" >> RELEASE_CHANGELOG.md
         fi
 
     - name: Create Git Tag
